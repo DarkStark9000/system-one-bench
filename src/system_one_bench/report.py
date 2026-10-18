@@ -156,9 +156,22 @@ def write(folder: Path) -> Path:
         f"{env.get('os', '')}. Note: {run.get('note', '')}. Bench commit {run.get('bench_commit', '')}.",
         "",
     ]
+    # A resumed run is a mixed run: name every session's commit, so a reader sees which code measured what.
+    sessions = run.get("sessions", [])
+    if len(sessions) > 1:
+        listed = "; ".join(f"{i}: {s['started']}, commit {s['bench_commit']}" for i, s in enumerate(sessions, 1))
+        parts += [f"Sessions ({listed}). Each later session measured only the rows missing from the folder.", ""]
+    superseded = folder / "results.superseded.csv"
+    if superseded.exists():
+        with superseded.open(newline="", encoding="utf-8") as handle:
+            count = sum(1 for _ in csv.DictReader(handle))
+        parts += [f"`results.superseded.csv` keeps {count} earlier rows that a later session measured again.", ""]
+    session = 0
     for ceiling in run.get("ceilings", []):
+        session += ceiling["when"] == "start"
+        prefix = f"Session {session}: measured" if len(sessions) > 1 else "Measured"
         parts.append(
-            f"Measured ceiling at the {ceiling['when']}: BF16 matmul {ceiling.get('matmul_bf16_tflops')} TFLOP/s, "
+            f"{prefix} ceiling at the {ceiling['when']}: BF16 matmul {ceiling.get('matmul_bf16_tflops')} TFLOP/s, "
             f"FP16 matmul {ceiling.get('matmul_fp16_tflops')} TFLOP/s, device copy {ceiling.get('copy_gbps')} GB/s."
         )
     parts.append("")

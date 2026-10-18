@@ -2,6 +2,8 @@
 
 One folder per machine, and one folder per run inside it: `results/<machine>/<UTC time>-<tag>/`.
 
+A run folder holds `results.csv`, `env.json`, `run.json`, and the `report.md` and `summary.json` that `sob report` writes from them. When a defect is found in a backend after a run, its rows can be measured again: they move to `results.superseded.csv`, unchanged, a resumed session measures them with the fixed code, and `run.json` records every session's commit. `report.md` names the sessions and the superseded rows.
+
 ## results.csv columns
 
 | Column | Meaning |
