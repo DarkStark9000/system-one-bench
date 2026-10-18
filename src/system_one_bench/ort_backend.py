@@ -28,12 +28,24 @@ _TRT_PROFILE = {
     "max": "input_ids:64x512,attention_mask:64x512,marker_pos:64x16,marker_mask:64x16,qtype:64",
 }
 
+# The CUDA provider's memory pool by default doubles whenever it grows and never
+# shrinks. In the first v0.1.0 run on an 8 GB laptop GPU, the 50-question call
+# grew it to about 7.5 GB, and Windows then spilled GPU memory into system
+# memory: calls ran up to 2.9 times slower with no error while the GPU idled. The
+# pool now grows only by what each allocation asks for, and stops at a cap below
+# the card's memory, so a request that does not fit fails as an error row instead
+# of being timed at system-memory speed.
+_ORT_CUDA = {
+    "arena_extend_strategy": "kSameAsRequested",
+    "gpu_mem_limit": str(6 * 1024**3),
+}
+
 
 def providers_for(name: str, cache_dir: Path) -> list:
     if name == "ort-cpu":
         return ["CPUExecutionProvider"]
     if name == "ort-cuda":
-        return [("CUDAExecutionProvider", {}), "CPUExecutionProvider"]
+        return [("CUDAExecutionProvider", dict(_ORT_CUDA)), "CPUExecutionProvider"]
     if name == "ort-trt-fp16":
         cache_dir.mkdir(parents=True, exist_ok=True)
         options = {
