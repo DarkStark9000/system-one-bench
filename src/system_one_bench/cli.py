@@ -69,7 +69,7 @@ def _bench_commit() -> str:
     return f"{commit}+uncommitted" if dirty else commit
 
 
-def _write(rows, machine: str, settings, label: str) -> Path:
+def _write(rows, machine: str, settings, label: str, note: str) -> Path:
     from system_one_bench import inputs, models
     from system_one_bench.env import fingerprint
     from system_one_bench.runner import as_record
@@ -88,6 +88,7 @@ def _write(rows, machine: str, settings, label: str) -> Path:
         "utc": stamp,
         "machine": machine,
         "bench_commit": _bench_commit(),
+        "note": note,
         "input_sha256": inputs.input_digest(),
         "pins_match_laya": not models.check_pins(),
         "settings": {k: str(v) for k, v in vars(settings).items()},
@@ -131,6 +132,11 @@ def main(argv=None) -> int:
         cmd.add_argument("--iterations", type=int, default=30)
         cmd.add_argument("--repeats", type=int, default=5)
         cmd.add_argument("--no-rest", action="store_true", help="skip the rest before each backend")
+        cmd.add_argument(
+            "--note",
+            default="",
+            help="machine settings the fingerprint cannot read, such as a vendor power mode or overclock",
+        )
         cmd.add_argument("--cache", default=".cache")
     run = sub.choices["run"]
     run.add_argument("--checkpoint", default="english")
@@ -159,7 +165,7 @@ def main(argv=None) -> int:
         sweeps = [(k, n) for k, n in defaults if k in workloads and (sizes is None or n in sizes)]
         rows = _run(args.checkpoint.split(","), args.backend.split(","), sweeps, settings)
         label = "run"
-    folder = _write(rows, args.machine, settings, label)
+    folder = _write(rows, args.machine, settings, label, args.note)
     print(f"wrote {folder}")
     return 0
 

@@ -6,7 +6,7 @@ Results from other machines are welcome by pull request: data center GPUs, other
 
 1. Use a release tag, not `main`: `git checkout v0.1.0`.
 2. Run on mains power, with other heavy programs closed.
-3. Run `uv run sob reproduce --tag v0.1.0 --machine <label>`. Choose a short label that names the hardware, such as `h100-sxm`, `m3-max` or `rtx4090-desktop`.
+3. Run `uv run sob reproduce --tag v0.1.0 --machine <label> --note "<settings>"`. Choose a short label that names the hardware, such as `h100-sxm`, `m3-max` or `rtx4090-desktop`. In the note, give what the fingerprint cannot read: a vendor power or thermal mode, and whether any overclock is on. Run at stock clocks.
 4. Open a pull request that adds the folder `results/<label>/<run>/` exactly as the command wrote it. Do not edit the files.
 
 ## What a result folder holds
