@@ -1,0 +1,45 @@
+[project]
+name = "system-one-bench"
+version = "0.1.0"
+description = "Reproducible latency benchmarks for Laya, Convai Innovations' System 1 decision model."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "Debarshi Das" }]
+requires-python = ">=3.11"
+dependencies = [
+    "laya==0.4.11",
+    "torch>=2.6",
+    "transformers>=4.48",
+    "numpy>=1.26",
+    "psutil>=5.9",
+]
+
+[project.optional-dependencies]
+onnx = ["onnx", "onnxscript", "onnxruntime-gpu; platform_system != 'Darwin'", "onnxruntime; platform_system == 'Darwin'"]
+# torch.compile with CUDA graphs needs Triton; the Linux torch wheel already ships it.
+graphs = ["triton-windows; platform_system == 'Windows'"]
+# laya's TileLang fast path (laya[fast]).
+fast = ["tilelang>=0.1.14; platform_system != 'Darwin'"]
+# TensorRT 10, because onnxruntime-gpu 1.31's TensorRT provider links nvinfer_10.
+tensorrt = ["tensorrt-cu13>=10.16,<11; platform_system != 'Darwin'"]
+
+[project.scripts]
+sob = "system_one_bench.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/DarkStark9000/system-one-bench"
+
+# CUDA 13 for PyTorch, because onnxruntime-gpu 1.31 is built for CUDA 13 and
+# both must load the same CUDA runtime in one process.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu130", marker = "platform_system != 'Darwin'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[build-system]
+requires = ["uv_build>=0.12.0,<0.13.0"]
+build-backend = "uv_build"

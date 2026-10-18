@@ -1,0 +1,13 @@
+system-one-bench
+Copyright (c) 2026 Debarshi Das. Released under the MIT License (see LICENSE).
+
+This repository measures Laya, a System 1 decision model made by Convai
+Innovations and released under the Apache License 2.0:
+
+  Model:   https://huggingface.co/convaiinnovations/laya
+  Runtime: https://github.com/NandhaKishorM/laya (PyPI package "laya")
+
+The model weights are not redistributed here. The benchmark downloads them
+from Hugging Face at the commit pinned in src/system_one_bench/models.py,
+under their own license. Laya, its checkpoints and its runtime are the work
+of Convai Innovations; this repository is independent of them.
