@@ -1,0 +1,63 @@
+{
+  "label": "v0.1.0",
+  "utc": "20261018T184211Z",
+  "machine": "rtx4060-laptop",
+  "bench_commit": "67bb83bfd92ea03842538f4bf2a9d15475ccfe24",
+  "note": "Lenovo Legion, Legion Edge thermal mode Performance, GPU overclock off, GPU working mode Hybrid, on mains power",
+  "input_sha256": "dd5220a45ed717b88edf91bd2884bf0f392bf95cc7f11dbe8be374beaf00e035",
+  "pins_match_laya": true,
+  "settings": {
+    "warmup": "5",
+    "warmup_budget_s": "10.0",
+    "iterations": "30",
+    "repeats": "5",
+    "min_iterations": "3",
+    "round_budget_s": "60.0",
+    "rest": "True",
+    "cache": ".cache"
+  },
+  "command": "D:\\DarkStark9000\\system-one-bench\\.venv\\Scripts\\sob reproduce --tag v0.1.0 --machine rtx4060-laptop --note Lenovo Legion, Legion Edge thermal mode Performance, GPU overclock off, GPU working mode Hybrid, on mains power",
+  "sessions": [
+    {
+      "started": "20261018T184214Z",
+      "bench_commit": "67bb83bfd92ea03842538f4bf2a9d15475ccfe24",
+      "command": "D:\\DarkStark9000\\system-one-bench\\.venv\\Scripts\\sob reproduce --tag v0.1.0 --machine rtx4060-laptop --note Lenovo Legion, Legion Edge thermal mode Performance, GPU overclock off, GPU working mode Hybrid, on mains power"
+    },
+    {
+      "started": "20261018T225215Z",
+      "bench_commit": "9ab879506a355ba08295e0fe70f784e845a480ab",
+      "command": "D:\\DarkStark9000\\system-one-bench\\.venv\\Scripts\\sob reproduce --tag v0.1.0 --machine rtx4060-laptop --resume results\\rtx4060-laptop\\20261018T184211Z-v0.1.0"
+    }
+  ],
+  "ceilings": [
+    {
+      "when": "start",
+      "utc": "20261018T184220Z",
+      "matmul_bf16_tflops": 27.78,
+      "matmul_fp16_tflops": 26.1,
+      "copy_gbps": 218.9
+    },
+    {
+      "when": "end",
+      "utc": "20261018T222420Z",
+      "matmul_bf16_tflops": 28.67,
+      "matmul_fp16_tflops": 27.47,
+      "copy_gbps": 220.97
+    },
+    {
+      "when": "start",
+      "utc": "20261018T225221Z",
+      "matmul_bf16_tflops": 29.5,
+      "matmul_fp16_tflops": 27.31,
+      "copy_gbps": 220.68
+    },
+    {
+      "when": "end",
+      "utc": "20261018T230731Z",
+      "matmul_bf16_tflops": 25.48,
+      "matmul_fp16_tflops": 25.02,
+      "copy_gbps": 220.72
+    }
+  ],
+  "completed": "20261018T230731Z"
+}
