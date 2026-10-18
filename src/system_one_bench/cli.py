@@ -24,16 +24,17 @@ PRESETS = {
         "checkpoints": ["english", "typed-decisions"],
         "sweeps": [("questions", n) for n in (1, 5, 10, 50)] + [("batch", n) for n in (1, 8, 32, 64)],
         "backends": {
+            # GPU backends first, CPU last: an hour of CPU load heats a laptop and slows its GPU.
             "cuda": [
-                "torch-cpu",
                 "torch-cuda-bf16",
                 "torch-cuda-fp16",
                 "torch-cuda-fp32",
                 "torch-cuda-graphs",
                 "torch-cuda-tilelang",
-                "ort-cpu",
                 "ort-cuda",
                 "ort-trt-fp16",
+                "torch-cpu",
+                "ort-cpu",
             ],
             "mps": ["torch-cpu", "torch-mps", "ort-cpu", "ort-coreml"],
             "dml": ["torch-cpu", "ort-cpu", "ort-dml", "ort-vitisai"],
@@ -99,7 +100,13 @@ def _write(rows, machine: str, settings, label: str) -> Path:
 def _settings(args):
     from system_one_bench.runner import Settings
 
-    return Settings(warmup=args.warmup, iterations=args.iterations, repeats=args.repeats, cache=Path(args.cache))
+    return Settings(
+        warmup=args.warmup,
+        iterations=args.iterations,
+        repeats=args.repeats,
+        rest=not args.no_rest,
+        cache=Path(args.cache),
+    )
 
 
 def _run(checkpoints, backends, sweeps, settings):
@@ -123,6 +130,7 @@ def main(argv=None) -> int:
         cmd.add_argument("--warmup", type=int, default=5)
         cmd.add_argument("--iterations", type=int, default=30)
         cmd.add_argument("--repeats", type=int, default=5)
+        cmd.add_argument("--no-rest", action="store_true", help="skip the rest before each backend")
         cmd.add_argument("--cache", default=".cache")
     run = sub.choices["run"]
     run.add_argument("--checkpoint", default="english")

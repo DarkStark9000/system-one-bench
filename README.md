@@ -74,7 +74,8 @@ The commits are the reviewed pins in laya's own `laya.revisions.PINNED_REVISIONS
 
 ## Read a result
 
-- Laptop GPUs change clocks with power and temperature. `env.json` records the power source; run on mains power.
+- Laptop GPUs change clocks with power and temperature. On the RTX 4060 Laptop, one call took nearly twice as long after an hour of CPU load as on a cool machine. So GPU backends run before CPU ones, every backend starts after a rest (at least 30 s, then until the GPU is at 65 C or less, at most 3 minutes), and each row records the GPU's temperature and clock. `env.json` records the power source; run on mains power.
+- A slow row (a CPU call can take 24 s) times at least 3 calls per round, so its p99 is the slowest of few calls. The `calls` column gives the count.
 - Two rows differ only when their p50 ranges do not overlap. A difference inside the overlap is noise.
 - The phase split adds device waits, so its total can differ from the unsplit p50 by a few percent. The unsplit p50 is the latency a caller sees.
 - A FLOPs rate here is a floor: it counts matrix multiplications on real tokens only.

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
-from system_one_bench import flops, inputs, stats
+from system_one_bench import flops, inputs, stats, thermal
 from system_one_bench.models import Checkpoint
 
 TORCH_BACKENDS = (
@@ -28,11 +28,17 @@ BACKENDS = TORCH_BACKENDS + ORT_BACKENDS
 
 @dataclass
 class Settings:
+    """Warm-up runs once per row: up to `warmup` calls or `warmup_budget_s`, whichever ends first.
+    Each round then warms with one call and times between `min_iterations` and `iterations` calls,
+    as many as fit in `round_budget_s`."""
+
     warmup: int = 5
+    warmup_budget_s: float = 10.0
     iterations: int = 30
     repeats: int = 5
-    min_iterations: int = 10
+    min_iterations: int = 3
     round_budget_s: float = 60.0
+    rest: bool = True
     cache: Path = Path(".cache")
 
 
@@ -62,6 +68,10 @@ class Row:
     tflops_device: float = math.nan
     parity_max_prob_diff: float = math.nan
     parity_argmax: str = ""
+    gpu_temp_start_c: float = math.nan
+    gpu_clock_start_mhz: float = math.nan
+    gpu_temp_end_c: float = math.nan
+    gpu_clock_end_mhz: float = math.nan
 
 
 def model_dir(ckpt: Checkpoint) -> str:
@@ -164,21 +174,29 @@ def reference(ckpt: Checkpoint, directory: str, kind: str, size: int, settings: 
     return data
 
 
+def _timed(call) -> float:
+    start = time.perf_counter()
+    call()
+    return time.perf_counter() - start
+
+
+def _warm(call, settings: Settings) -> float:
+    """Warm the backend once per row; returns the last call's seconds, to size each round."""
+    began, last = time.monotonic(), 0.0
+    for _ in range(settings.warmup):
+        last = _timed(call)
+        if time.monotonic() - began > settings.warmup_budget_s:
+            break
+    return last
+
+
 def _time_calls(call, settings: Settings) -> list[list[float]]:
+    per_call = _warm(call, settings)
+    count = max(settings.min_iterations, min(settings.iterations, int(settings.round_budget_s / max(per_call, 1e-6))))
     rounds = []
     for _ in range(settings.repeats):
-        for _ in range(settings.warmup):
-            call()
-        start = time.perf_counter()
-        call()
-        first = time.perf_counter() - start
-        count = max(settings.min_iterations, min(settings.iterations, int(settings.round_budget_s / max(first, 1e-6))))
-        samples = [first * 1000.0]
-        for _ in range(count - 1):
-            start = time.perf_counter()
-            call()
-            samples.append((time.perf_counter() - start) * 1000.0)
-        rounds.append(samples)
+        call()  # one warm call per round, untimed
+        rounds.append([_timed(call) * 1000.0 for _ in range(count)])
     return rounds
 
 
@@ -191,14 +209,16 @@ def measure(row: Row, agent, ckpt: Checkpoint, directory: str, settings: Setting
     is_ort = row.backend in ORT_BACKENDS
     split = staged_ort_predict if is_ort else staged_predict
 
+    row.gpu_temp_start_c, row.gpu_clock_start_mhz = thermal.gpu_state()
     rounds = _time_calls(lambda: agent.predict_batch(states, questions), settings)
+    row.gpu_temp_end_c, row.gpu_clock_end_mhz = thermal.gpu_state()
     summary = stats.summarize(rounds)
     row.calls, row.p50_ms, row.p99_ms = summary.calls, summary.p50_ms, summary.p99_ms
     row.p50_low_ms, row.p50_high_ms = summary.p50_low_ms, summary.p50_high_ms
 
     samples: dict[str, list[float]] = {}
     staged_results = None
-    for _ in range(max(settings.min_iterations, min(settings.iterations, len(rounds[0])))):
+    for _ in range(len(rounds[0])):
         staged_results, phases = split(agent, states, questions)
         for phase, ms in phases.items():
             samples.setdefault(phase, []).append(ms)
@@ -235,6 +255,8 @@ def run_backend(backend: str, ckpt: Checkpoint, sweeps: list[tuple[str, int]], s
     """Every sweep row for one backend and checkpoint. A failure becomes a row, never a gap."""
     directory = model_dir(ckpt)
     rows = [Row(ckpt.name, ckpt.revision, backend, kind, size) for kind, size in sweeps]
+    if settings.rest:
+        print(f"resting {thermal.rest():.0f} s before {backend}", flush=True)
     try:
         agent, precision = load(backend, ckpt, directory, settings)
     except BaseException as exc:  # noqa: BLE001 - a backend that cannot load is a result to report
