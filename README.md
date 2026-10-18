@@ -60,7 +60,7 @@ uv run sob run --machine my-laptop --checkpoint english --backend torch-cuda-bf1
 
 The first run downloads each checkpoint at its pinned commit and refuses weights whose SHA-256 does not match. Results go to `results/<machine>/<run>/`.
 
-On Windows, `torch-cuda-graphs` compiles with MSVC: run the command from an "x64 Native Tools" prompt of Visual Studio, or after `vcvars64.bat`. Without it the row fails with "Compiler: cl is not found". `torch-cuda-tilelang` compiles kernels with the CUDA toolkit. Install its compiler with NVVM (on Windows, the network installer's `nvcc_13.0`, `crt_13.0`, `nvvm_13.0`, `cudart_13.0` and `thrust_13.0` components; no driver is needed) and set `CUDA_HOME`. On Windows also set `TILELANG_DISABLE_CLANG_CL=1`: TileLang 0.1.15 otherwise hands `nvcc` the `clang-cl` host compiler, which `nvcc` rejects ([tile-ai/tilelang#3509](https://github.com/tile-ai/tilelang/issues/3509), fixed after 0.1.15).
+On Windows with an NVIDIA GPU, run through `scripts\run-windows-cuda.cmd`, which sets up MSVC, the CUDA toolkit and TileLang in the right order: `scripts\run-windows-cuda.cmd reproduce --tag v0.1.0 --machine my-laptop`. `torch-cuda-graphs` compiles with MSVC; without it the row fails with "Compiler: cl is not found". `torch-cuda-tilelang` compiles kernels with the CUDA toolkit. Install its compiler with NVVM (on Windows, the network installer's `nvcc_13.0`, `crt_13.0`, `nvvm_13.0`, `cudart_13.0` and `thrust_13.0` components; no driver is needed) and set `CUDA_HOME`. On Windows also set `TILELANG_DISABLE_CLANG_CL=1`: TileLang 0.1.15 otherwise hands `nvcc` the `clang-cl` host compiler, which `nvcc` rejects ([tile-ai/tilelang#3509](https://github.com/tile-ai/tilelang/issues/3509), fixed after 0.1.15).
 
 ## Pinned inputs
 
