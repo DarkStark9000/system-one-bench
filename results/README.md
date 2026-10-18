@@ -22,6 +22,7 @@ One folder per machine, and one folder per run inside it: `results/<machine>/<UT
 | `tflops_wall`, `tflops_device` | That work over the p50, and over the device time |
 | `gpu_temp_start_c`, `gpu_clock_start_mhz`, `gpu_temp_end_c`, `gpu_clock_end_mhz` | NVIDIA only: the GPU's temperature and SM clock when the row's timing began and ended |
 | `rss_mb`, `peak_mb` | The benchmark process's memory after the row, and its peak so far |
+| `gpu_mem_start_mib` | NVIDIA only: GPU memory in use when the row's timing began. Near the card's total, Windows can spill GPU memory to system RAM and slow every call |
 | `parity_max_prob_diff`, `parity_argmax` | Against FP32 PyTorch on the CPU: the largest probability difference, and answers that pick the same option |
 
 An empty or `nan` cell means the column does not apply to that backend.

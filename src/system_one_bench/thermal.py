@@ -14,17 +14,26 @@ MIN_REST_S = 30.0
 MAX_REST_S = 180.0
 
 
-def gpu_state() -> tuple[float, float]:
-    """(temperature in C, SM clock in MHz) of the first NVIDIA GPU, or NaNs when there is none."""
+def _query(fields: str) -> list[float]:
     try:
         out = subprocess.run(
-            ["nvidia-smi", "--query-gpu=temperature.gpu,clocks.sm", "--format=csv,noheader,nounits"],
+            ["nvidia-smi", f"--query-gpu={fields}", "--format=csv,noheader,nounits"],
             capture_output=True, text=True, timeout=10, check=True,
         )
-        temperature, clock = (float(part) for part in out.stdout.splitlines()[0].split(","))
+        return [float(part) for part in out.stdout.splitlines()[0].split(",")]
     except (OSError, subprocess.SubprocessError, ValueError, IndexError):
-        return float("nan"), float("nan")
+        return [float("nan")] * len(fields.split(","))
+
+
+def gpu_state() -> tuple[float, float]:
+    """(temperature in C, SM clock in MHz) of the first NVIDIA GPU, or NaNs when there is none."""
+    temperature, clock = _query("temperature.gpu,clocks.sm")
     return temperature, clock
+
+
+def gpu_memory_used_mib() -> float:
+    """GPU memory in use, all processes. Near the card's total, Windows may spill to system RAM and slow every call."""
+    return _query("memory.used")[0]
 
 
 def rest() -> float:

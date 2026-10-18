@@ -80,6 +80,7 @@ class Row:
     gpu_clock_end_mhz: float = math.nan
     rss_mb: float = math.nan
     peak_mb: float = math.nan
+    gpu_mem_start_mib: float = math.nan
 
 
 def model_dir(ckpt: Checkpoint) -> str:
@@ -218,6 +219,7 @@ def measure(row: Row, agent, ckpt: Checkpoint, directory: str, settings: Setting
     split = staged_ort_predict if is_ort else staged_predict
 
     row.gpu_temp_start_c, row.gpu_clock_start_mhz = thermal.gpu_state()
+    row.gpu_mem_start_mib = thermal.gpu_memory_used_mib()
     rounds = _time_calls(lambda: agent.predict_batch(states, questions), settings)
     row.gpu_temp_end_c, row.gpu_clock_end_mhz = thermal.gpu_state()
     summary = stats.summarize(rounds)
