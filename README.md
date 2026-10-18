@@ -60,7 +60,7 @@ uv run sob run --machine my-laptop --checkpoint english --backend torch-cuda-bf1
 
 The first run downloads each checkpoint at its pinned commit and refuses weights whose SHA-256 does not match. Results go to `results/<machine>/<run>/`.
 
-On Windows, `torch-cuda-graphs` compiles with MSVC: run the command from an "x64 Native Tools" prompt of Visual Studio, or after `vcvars64.bat`. Without it the row fails with "Compiler: cl is not found". `torch-cuda-tilelang` needs the CUDA toolkit (`nvcc`) on the path and `CUDA_HOME` set; on Windows also set `CXX=cl`, because TileLang otherwise passes a host-compiler path with spaces to `nvcc`. On the Windows laptop in `results/rtx4060-laptop/`, TileLang 0.1.15 still fails to compile its kernels, and the row records the error.
+On Windows, `torch-cuda-graphs` compiles with MSVC: run the command from an "x64 Native Tools" prompt of Visual Studio, or after `vcvars64.bat`. Without it the row fails with "Compiler: cl is not found". `torch-cuda-tilelang` compiles kernels with the CUDA toolkit. Install its compiler with NVVM (on Windows, the network installer's `nvcc_13.0`, `crt_13.0`, `nvvm_13.0`, `cudart_13.0` and `thrust_13.0` components; no driver is needed) and set `CUDA_HOME`. On Windows also set `TILELANG_DISABLE_CLANG_CL=1`: TileLang 0.1.15 otherwise hands `nvcc` the `clang-cl` host compiler, which `nvcc` rejects ([tile-ai/tilelang#3509](https://github.com/tile-ai/tilelang/issues/3509), fixed after 0.1.15).
 
 ## Pinned inputs
 
