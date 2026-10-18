@@ -122,6 +122,18 @@ class ResultFolder:
         run["completed"] = _utc()
         self._write_run(run)
 
+    def record_ceiling(self, when: str) -> None:
+        """The GPU's measured matmul and copy ceilings at the start and end of a session."""
+        from system_one_bench.ceiling import measure
+
+        values = measure()
+        if not values:
+            return
+        run = self._read_run()
+        run.setdefault("ceilings", []).append({"when": when, "utc": _utc(), **values})
+        self._write_run(run)
+        print(f"ceiling ({when}): {values}", flush=True)
+
     def done(self) -> frozenset[tuple[str, str, str, int]]:
         if not self.csv.exists():
             return frozenset()
@@ -162,9 +174,11 @@ def _run(checkpoints, backends, sweeps, settings, result: ResultFolder) -> None:
     if done:
         print(f"resuming {result.folder}: {len(done)} rows already measured", flush=True)
     result.begin_session()
+    result.record_ceiling("start")
     for name in checkpoints:
         for backend in backends:
             run_backend(backend, checkpoint(name), sweeps, settings, result.append, done)
+    result.record_ceiling("end")
     result.finish()
 
 
@@ -172,6 +186,7 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="sob", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("env", help="print this machine's fingerprint")
+    sub.add_parser("report", help="write report.md and summary.json for a result folder").add_argument("folder")
     for name in ("run", "reproduce"):
         cmd = sub.add_parser(name)
         cmd.add_argument("--machine", required=True, help="a short label for this machine, such as laptop-b")
@@ -198,6 +213,11 @@ def main(argv=None) -> int:
         from system_one_bench.env import fingerprint
 
         print(json.dumps(fingerprint(), indent=2))
+        return 0
+    if args.command == "report":
+        from system_one_bench.report import write
+
+        print(f"wrote {write(Path(args.folder))}")
         return 0
 
     settings = _settings(args)

@@ -25,6 +25,11 @@ TORCH_BACKENDS = (
 )
 ORT_BACKENDS = ("ort-cpu", "ort-cuda", "ort-trt-fp16", "ort-dml", "ort-coreml", "ort-vitisai")
 BACKENDS = TORCH_BACKENDS + ORT_BACKENDS
+# Every phase either split can report; ONNX Runtime's "model" covers transfer_in to transfer_out.
+PHASE_COLUMNS = (
+    "prepare", "tokenize", "collate", "transfer_in", "dispatch", "encoder", "head", "forward",
+    "transfer_out", "model", "decode",
+)
 
 
 @dataclass
@@ -345,6 +350,6 @@ def _line(row: Row) -> str:
 def as_record(row: Row) -> dict:
     record = asdict(row)
     phases = record.pop("phases_ms")
-    for phase in ("prepare", "tokenize", "collate", "transfer_in", "dispatch", "encoder", "head", "transfer_out", "model", "decode"):
+    for phase in PHASE_COLUMNS:
         record[f"ms_{phase}"] = phases.get(phase, math.nan)
     return record

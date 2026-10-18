@@ -11,6 +11,8 @@ waits for the device to finish, so each phase is wall time from the host's view:
     dispatch      from the copy to the first encoder op: autocast, locks, Python
     encoder       the encoder's forward pass
     head          the decision head, scorer and act head
+    forward       dispatch, encoder and head as one phase, when a compiled or
+                  fast-path forward hides the encoder's boundary
     transfer_out  copy the logits back to the host
     decode        softmax, temperature and typed answers in NumPy and Python
 
@@ -35,6 +37,7 @@ PHASES = (
     "dispatch",
     "encoder",
     "head",
+    "forward",
     "transfer_out",
     "decode",
 )
@@ -103,7 +106,9 @@ def staged_predict(agent, states: list, questions: dict) -> tuple[list[dict], di
 
     with encoder_marks(agent, clock):
         logits, act = agent._infer(on_device)
-    clock.mark("head")
+    # A compiled or fast-path forward replaces the encoder module's own forward, so its
+    # hooks never fire; the whole pass is then one "forward" phase, not a false "head".
+    clock.mark("head" if "encoder" in clock.ms else "forward")
 
     logits_np = logits.float().cpu().numpy()
     act_np = torch.softmax(act.float(), -1).cpu().numpy()
