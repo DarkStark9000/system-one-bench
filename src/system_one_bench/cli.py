@@ -69,33 +69,77 @@ def _bench_commit() -> str:
     return f"{commit}+uncommitted" if dirty else commit
 
 
-def _write(rows, machine: str, settings, label: str, note: str) -> Path:
-    from system_one_bench import inputs, models
-    from system_one_bench.env import fingerprint
-    from system_one_bench.runner import as_record
+def _utc() -> str:
+    return datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
-    stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    folder = Path("results") / machine / f"{stamp}-{label}"
-    folder.mkdir(parents=True, exist_ok=True)
-    records = [as_record(row) for row in rows]
-    with (folder / "results.csv").open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(records[0]))
-        writer.writeheader()
-        writer.writerows(records)
-    (folder / "env.json").write_text(json.dumps(fingerprint(), indent=2), encoding="utf-8")
-    run = {
-        "label": label,
-        "utc": stamp,
-        "machine": machine,
-        "bench_commit": _bench_commit(),
-        "note": note,
-        "input_sha256": inputs.input_digest(),
-        "pins_match_laya": not models.check_pins(),
-        "settings": {k: str(v) for k, v in vars(settings).items()},
-        "command": " ".join(sys.argv),
-    }
-    (folder / "run.json").write_text(json.dumps(run, indent=2), encoding="utf-8")
-    return folder
+
+class ResultFolder:
+    """results/<machine>/<UTC>-<label>/: rows are appended to results.csv as each one finishes,
+    so a stopped run keeps what it measured, and `--resume` continues it."""
+
+    def __init__(self, folder: Path):
+        self.folder = folder
+        self.csv = folder / "results.csv"
+
+    @classmethod
+    def start(cls, machine: str, label: str, settings, note: str) -> "ResultFolder":
+        from system_one_bench import inputs, models
+        from system_one_bench.env import fingerprint
+
+        stamp = _utc()
+        result = cls(Path("results") / machine / f"{stamp}-{label}")
+        result.folder.mkdir(parents=True, exist_ok=True)
+        (result.folder / "env.json").write_text(json.dumps(fingerprint(), indent=2), encoding="utf-8")
+        run = {
+            "label": label,
+            "utc": stamp,
+            "machine": machine,
+            "bench_commit": _bench_commit(),
+            "note": note,
+            "input_sha256": inputs.input_digest(),
+            "pins_match_laya": not models.check_pins(),
+            "settings": {k: str(v) for k, v in vars(settings).items()},
+            "command": " ".join(sys.argv),
+            "sessions": [],
+        }
+        result._write_run(run)
+        return result
+
+    def _write_run(self, run: dict) -> None:
+        (self.folder / "run.json").write_text(json.dumps(run, indent=2), encoding="utf-8")
+
+    def _read_run(self) -> dict:
+        return json.loads((self.folder / "run.json").read_text(encoding="utf-8"))
+
+    def begin_session(self) -> None:
+        """Record each start or resume, with the commit it ran, so a mixed run is visible."""
+        run = self._read_run()
+        run["sessions"].append({"started": _utc(), "bench_commit": _bench_commit(), "command": " ".join(sys.argv)})
+        self._write_run(run)
+
+    def finish(self) -> None:
+        run = self._read_run()
+        run["completed"] = _utc()
+        self._write_run(run)
+
+    def done(self) -> frozenset[tuple[str, str, str, int]]:
+        if not self.csv.exists():
+            return frozenset()
+        with self.csv.open(newline="", encoding="utf-8") as handle:
+            return frozenset(
+                (r["checkpoint"], r["backend"], r["workload"], int(r["size"])) for r in csv.DictReader(handle)
+            )
+
+    def append(self, row) -> None:
+        from system_one_bench.runner import as_record
+
+        record = as_record(row)
+        is_new = not self.csv.exists()
+        with self.csv.open("a", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=list(record))
+            if is_new:
+                writer.writeheader()
+            writer.writerow(record)
 
 
 def _settings(args):
@@ -110,15 +154,18 @@ def _settings(args):
     )
 
 
-def _run(checkpoints, backends, sweeps, settings):
+def _run(checkpoints, backends, sweeps, settings, result: ResultFolder) -> None:
     from system_one_bench.models import checkpoint
     from system_one_bench.runner import run_backend
 
-    rows = []
+    done = result.done()
+    if done:
+        print(f"resuming {result.folder}: {len(done)} rows already measured", flush=True)
+    result.begin_session()
     for name in checkpoints:
         for backend in backends:
-            rows.extend(run_backend(backend, checkpoint(name), sweeps, settings))
-    return rows
+            run_backend(backend, checkpoint(name), sweeps, settings, result.append, done)
+    result.finish()
 
 
 def main(argv=None) -> int:
@@ -138,6 +185,7 @@ def main(argv=None) -> int:
             help="machine settings the fingerprint cannot read, such as a vendor power mode or overclock",
         )
         cmd.add_argument("--cache", default=".cache")
+        cmd.add_argument("--resume", default="", help="a result folder to continue: rows it holds are skipped")
     run = sub.choices["run"]
     run.add_argument("--checkpoint", default="english")
     run.add_argument("--backend", required=True, help="comma-separated backends")
@@ -153,20 +201,23 @@ def main(argv=None) -> int:
         return 0
 
     settings = _settings(args)
+    label = args.tag if args.command == "reproduce" else "run"
+    if args.resume:
+        result = ResultFolder(Path(args.resume))
+        if not (result.folder / "run.json").exists():
+            raise SystemExit(f"{args.resume} is not a result folder: it has no run.json")
+    else:
+        result = ResultFolder.start(args.machine, label, settings, args.note)
     if args.command == "reproduce":
         preset = PRESETS[args.tag]
-        backends = preset["backends"][_platform()]
-        rows = _run(preset["checkpoints"], backends, preset["sweeps"], settings)
-        label = args.tag
+        _run(preset["checkpoints"], preset["backends"][_platform()], preset["sweeps"], settings, result)
     else:
         workloads = args.workload.split(",")
         defaults = PRESETS["v0.1.0"]["sweeps"]
         sizes = [int(s) for s in args.sizes.split(",")] if args.sizes else None
         sweeps = [(k, n) for k, n in defaults if k in workloads and (sizes is None or n in sizes)]
-        rows = _run(args.checkpoint.split(","), args.backend.split(","), sweeps, settings)
-        label = "run"
-    folder = _write(rows, args.machine, settings, label, args.note)
-    print(f"wrote {folder}")
+        _run(args.checkpoint.split(","), args.backend.split(","), sweeps, settings, result)
+    print(f"wrote {result.folder}")
     return 0
 
 

@@ -5,6 +5,7 @@ import math
 import statistics
 import time
 import traceback
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -72,6 +73,8 @@ class Row:
     gpu_clock_start_mhz: float = math.nan
     gpu_temp_end_c: float = math.nan
     gpu_clock_end_mhz: float = math.nan
+    rss_mb: float = math.nan
+    peak_mb: float = math.nan
 
 
 def model_dir(ckpt: Checkpoint) -> str:
@@ -251,10 +254,47 @@ def measure(row: Row, agent, ckpt: Checkpoint, directory: str, settings: Setting
     row.parity_argmax = f"{agree}/{len(picks)}"
 
 
-def run_backend(backend: str, ckpt: Checkpoint, sweeps: list[tuple[str, int]], settings: Settings) -> list[Row]:
-    """Every sweep row for one backend and checkpoint. A failure becomes a row, never a gap."""
-    directory = model_dir(ckpt)
+def row_key(row: Row) -> tuple[str, str, str, int]:
+    return (row.checkpoint, row.backend, row.workload, row.size)
+
+
+def _memory(row: Row) -> None:
+    """The process's memory after the row, and its peak so far (Windows reports the peak working set)."""
+    import psutil
+
+    info = psutil.Process().memory_info()
+    row.rss_mb = info.rss / 2**20
+    row.peak_mb = getattr(info, "peak_wset", info.rss) / 2**20
+
+
+def _free_memory() -> None:
+    """Collect a released backend's model and return its GPU memory before the next backend loads."""
+    import gc
+
+    import torch
+
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+
+def run_backend(
+    backend: str,
+    ckpt: Checkpoint,
+    sweeps: list[tuple[str, int]],
+    settings: Settings,
+    on_row: Callable[[Row], None],
+    done: frozenset[tuple[str, str, str, int]] = frozenset(),
+) -> None:
+    """Every sweep row for one backend and checkpoint, each handed to `on_row` as it finishes.
+
+    A failure becomes a row, never a gap. Rows in `done` (from a resumed run) are skipped.
+    """
     rows = [Row(ckpt.name, ckpt.revision, backend, kind, size) for kind, size in sweeps]
+    rows = [row for row in rows if row_key(row) not in done]
+    if not rows:
+        return
+    directory = model_dir(ckpt)
     if settings.rest:
         print(f"resting {thermal.rest():.0f} s before {backend}", flush=True)
     try:
@@ -264,8 +304,10 @@ def run_backend(backend: str, ckpt: Checkpoint, sweeps: list[tuple[str, int]], s
             raise
         for row in rows:
             row.status, row.error = "load failed", _reason(exc)
+            _memory(row)
             print(_line(row), flush=True)
-        return rows
+            on_row(row)
+        return
     for row in rows:
         row.precision = precision
         try:
@@ -273,8 +315,11 @@ def run_backend(backend: str, ckpt: Checkpoint, sweeps: list[tuple[str, int]], s
         except Exception as exc:  # noqa: BLE001 - one failing shape must not hide the others
             row.status, row.error = "run failed", _reason(exc)
             traceback.print_exc()
+        _memory(row)
         print(_line(row), flush=True)
-    return rows
+        on_row(row)
+    del agent
+    _free_memory()
 
 
 def _reason(exc: BaseException) -> str:
