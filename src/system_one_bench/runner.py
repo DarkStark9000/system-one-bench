@@ -119,9 +119,9 @@ def load(backend: str, ckpt: Checkpoint, directory: str, settings: Settings):
     elif backend == "torch-cuda-graphs":
         agent = laya.load(directory, device="cuda", compile=True, compile_mode="reduce-overhead")
     elif backend == "torch-cuda-tilelang":
-        agent = laya.load(directory, device="cuda", backend="tilelang")
-        if agent.backend != "tilelang":
-            raise RuntimeError(f"laya fell back to the {agent.backend} backend")
+        # Strict, so a failure raises TileLang's own reason instead of falling back to eager.
+        agent = laya.load(directory, device="cuda")
+        agent.set_backend("tilelang", strict=True)
     else:
         agent = laya.load(directory, device="cuda")
         if backend == "torch-cuda-fp16":
@@ -256,7 +256,12 @@ def run_backend(backend: str, ckpt: Checkpoint, sweeps: list[tuple[str, int]], s
 
 
 def _reason(exc: BaseException) -> str:
-    text = f"{type(exc).__name__}: {exc}".replace("\n", " ")
+    text = str(exc)
+    # A kernel compiler prints the generated source before its error; keep the error.
+    marker = text.rfind("Compilation error")
+    if marker != -1:
+        text = text[marker:]
+    text = " ".join(f"{type(exc).__name__}: {text}".split())
     return text[:300]
 
 
